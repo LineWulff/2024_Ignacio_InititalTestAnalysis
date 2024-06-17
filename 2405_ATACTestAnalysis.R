@@ -1,7 +1,7 @@
 #' R script for testing scATAC analysis w. Seurat and Signac
 #' Author: Line Wulff
 #' Date (created): 24-05-16
-#' # Based on https://stuartlab.org/signac/articles/BMHAPBS8wk_vignette
+#' # Based on https://stuartlab.org/signac/articles/sampleobj_vignette
 
 #### ---- Initiate libraries ---- ####
 library(ggplot2)
@@ -27,7 +27,7 @@ seqlevels(annotations) <- paste0('chr', seqlevels(annotations))
 # GCRm38 should be same as mm10, mm10 is the UCSC format - but same in terms of sequences, changing name, since ref gen. was mm10
 genome(annotations) <- "mm10"
 
-## Sample 1
+## Sample object creation
 samp <- "BM-HA107-PBS-8wk"
 samp_dir <- paste(proj_data_dir, samp, sep = "")
 counts <- Read10X_h5(filename = paste(samp_dir,"filtered_peak_bc_matrix.h5",sep = "/"))
@@ -47,7 +47,7 @@ chrom_assay <- CreateChromatinAssay(
   min.features = 200
 )
 
-BMHAPBS8wk <- CreateSeuratObject(
+sampleobj <- CreateSeuratObject(
   counts = chrom_assay,
   assay = "peaks",
   motifs = motifs,
@@ -55,32 +55,35 @@ BMHAPBS8wk <- CreateSeuratObject(
 )
 
 
-BMHAPBS8wk$blacklist_fraction <- FractionCountsInRegion(
-  object = BMHAPBS8wk, 
+sampleobj$blacklist_fraction <- FractionCountsInRegion(
+  object = sampleobj, 
   assay = 'peaks',
   regions = blacklist_mm10
 )
 
-Annotation(BMHAPBS8wk) <- annotations
-BMHAPBS8wk@meta.data$orig.ident <- samp
-BMHAPBS8wk@meta.data$tissue <- unlist(str_split(BMHAPBS8wk@meta.data$orig.ident,"-"))[seq(1,nrow(BMHAPBS8wk@meta.data)*4,4)]
-BMHAPBS8wk@meta.data$colonization <- unlist(str_split(BMHAPBS8wk@meta.data$orig.ident,"-"))[seq(2,nrow(BMHAPBS8wk@meta.data)*4,4)]
-BMHAPBS8wk@meta.data$stimulation <- unlist(str_split(BMHAPBS8wk@meta.data$orig.ident,"-"))[seq(3,nrow(BMHAPBS8wk@meta.data)*4,4)]
-BMHAPBS8wk@meta.data$timepoint <- unlist(str_split(BMHAPBS8wk@meta.data$orig.ident,"-"))[seq(4,nrow(BMHAPBS8wk@meta.data)*4,4)]
+## Add meta data and gene annotations
+Annotation(sampleobj) <- annotations
+sampleobj@meta.data$orig.ident <- samp
+sampleobj@meta.data$tissue <- unlist(str_split(sampleobj@meta.data$orig.ident,"-"))[seq(1,nrow(sampleobj@meta.data)*4,4)]
+sampleobj@meta.data$colonization <- unlist(str_split(sampleobj@meta.data$orig.ident,"-"))[seq(2,nrow(sampleobj@meta.data)*4,4)]
+sampleobj@meta.data$stimulation <- unlist(str_split(sampleobj@meta.data$orig.ident,"-"))[seq(3,nrow(sampleobj@meta.data)*4,4)]
+sampleobj@meta.data$timepoint <- unlist(str_split(sampleobj@meta.data$orig.ident,"-"))[seq(4,nrow(sampleobj@meta.data)*4,4)]
 
 ## after last sample remove the unnecesseary objects to save env. space
 rm(chrom_assay, counts, metadata, annotations)
 
 ## Looking at the files at a glance
-BMHAPBS8wk[['peaks']]
-granges(BMHAPBS8wk)
-head(BMHAPBS8wk@assays$peaks@data)
-BMHAPBS8wk@assays$peaks@annotation
-head(BMHAPBS8wk@meta.data)
-
+sampleobj[['peaks']]
+granges(sampleobj)
+head(sampleobj@assays$peaks@data)
+sampleobj@assays$peaks@annotation
+head(sampleobj@meta.data)
 
 
 #### ---- Sample QC ---- ####
+## Set directory to individual sample QC folder to save all info on QC and threshold subsetting
+setwd(paste0(proj_data_dir,samp,"/QC"))
+
 ## Five measures:
 ## Nucleosome banding pattern - calculate, saved as nucleosome_signal
 ## Transcription starting site - calculate, saved TSS.Enrichment
@@ -90,46 +93,46 @@ head(BMHAPBS8wk@meta.data)
 
 # compute nucleosome signal score per cell
 # ratio of reads per cell from  mononucleosome (147-294 bp) to nucleosome free (<147 bp)
-BMHAPBS8wk <- NucleosomeSignal(object = BMHAPBS8wk)
+sampleobj <- NucleosomeSignal(object = sampleobj)
 
 # compute TSS enrichment score per cell
-BMHAPBS8wk <- TSSEnrichment(object = BMHAPBS8wk, fast = FALSE)
+sampleobj <- TSSEnrichment(object = sampleobj, fast = FALSE)
 
 # add blacklist ratio and fraction of reads in peaks
-BMHAPBS8wk$pct_reads_in_peaks <- BMHAPBS8wk$peak_region_fragments / BMHAPBS8wk$passed_filters * 100
+sampleobj$pct_reads_in_peaks <- sampleobj$peak_region_fragments / sampleobj$passed_filters * 100
 
 VlnPlot(
-  object = BMHAPBS8wk,
+  object = sampleobj,
   features = c('nCount_peaks', 'TSS.enrichment', 'blacklist_fraction', 'nucleosome_signal', 'pct_reads_in_peaks'),
   pt.size = 0.1,
   ncol = 3
 )
 
-DensityScatter(BMHAPBS8wk, x = 'nCount_peaks', y = 'TSS.enrichment', log_x = TRUE, quantiles = TRUE)
+DensityScatter(sampleobj, x = 'nCount_peaks', y = 'TSS.enrichment', log_x = TRUE, quantiles = TRUE)
 
-ggplot(BMHAPBS8wk@meta.data, aes(x = nCount_peaks))+
+ggplot(sampleobj@meta.data, aes(x = nCount_peaks))+
   geom_histogram(fill="grey",bins = 100)+
   geom_vline(xintercept = c(3000,100000), colour = "red")
 
-ggplot(BMHAPBS8wk@meta.data, aes(x = nCount_peaks, y = nucleosome_signal, colour = pct_reads_in_peaks))+
+ggplot(sampleobj@meta.data, aes(x = nCount_peaks, y = nucleosome_signal, colour = pct_reads_in_peaks))+
   geom_point_rast()+scale_color_viridis_c()+
   geom_vline(xintercept = c(3000,130000))
 
-ggplot(BMHAPBS8wk@meta.data, aes(x = nCount_peaks, y = nucleosome_signal, colour = blacklist_fraction))+
+ggplot(sampleobj@meta.data, aes(x = nCount_peaks, y = nucleosome_signal, colour = blacklist_fraction))+
   geom_point_rast()+scale_color_viridis_c()+
   geom_vline(xintercept = c(3000,130000))
 
 ## Nucleosome banding patterns
 # grouping cells based on their mononuc/nfr ration, here 2:1 - 2x mononucleosome bound to nfr 
-BMHAPBS8wk$nucleosome_group <- ifelse(BMHAPBS8wk$nucleosome_signal > 2, 'NS > 2', 'NS < 2') 
+sampleobj$nucleosome_group <- ifelse(sampleobj$nucleosome_signal > 2, 'NS > 2', 'NS < 2') 
 # plotted with fragment histo 
-length(BMHAPBS8wk$nucleosome_group[BMHAPBS8wk$nucleosome_group=='NS > 2'])
-FragmentHistogram(BMHAPBS8wk, group.by = 'nucleosome_group', region = "chr1-1-20000000")+geom_vline(xintercept = 147)
+length(sampleobj$nucleosome_group[sampleobj$nucleosome_group=='NS > 2'])
+FragmentHistogram(sampleobj, group.by = 'nucleosome_group', region = "chr1-1-20000000")+geom_vline(xintercept = 147)
 
 ## TSS enrivhment
-BMHAPBS8wk$high.tss <- ifelse(BMHAPBS8wk$TSS.enrichment > 3, 'High', 'Low')
-TSSPlot(BMHAPBS8wk, group.by = 'high.tss') + NoLegend()
-TSSPlot(BMHAPBS8wk, group.by = 'nucleosome_group') + NoLegend()
+sampleobj$high.tss <- ifelse(sampleobj$TSS.enrichment > 3, 'High', 'Low')
+TSSPlot(sampleobj, group.by = 'high.tss') + NoLegend()
+TSSPlot(sampleobj, group.by = 'nucleosome_group') + NoLegend()
 
 
 #### ---- Subset and save thresholds ---- ####
@@ -140,10 +143,10 @@ nuc_sign = 2
 blacklist_th = 0.05
 TSS.enrich = 3
 
-npre <- length(Cells(BMHAPBS8wk))
+npre <- length(Cells(sampleobj))
 
-BMHAPBS8wk <- subset(
-  x = BMHAPBS8wk,
+sampleobj <- subset(
+  x = sampleobj,
   subset = nCount_peaks > nCount_low &
     nCount_peaks < nCount_high &
     pct_reads_in_peaks > perc_readspeaks &
@@ -152,12 +155,12 @@ BMHAPBS8wk <- subset(
     TSS.enrichment > TSS.enrich
 )
 
-npost <- length(Cells(BMHAPBS8wk))
+npost <- length(Cells(sampleobj))
 remperc <- (npre-npost)/npost*100
 
-BMHAPBS8wk
+sampleobj
 
-ThresFile <- file(paste(dato,"SubsetThresholds",sample,".txt",sep="_"))
+ThresFile <- file(paste(dato,"SubsetThresholds",samp,".txt",sep="_"))
 writeLines(c(paste("Pre subsetting there were",npre,"cells."),
              paste("Removing ~",remperc,"% of cells during single cell QC."),
              paste("Post subsetting there are:",npost,"cells"),
@@ -171,12 +174,16 @@ writeLines(c(paste("Pre subsetting there were",npre,"cells."),
 close(ThresFile)
 
 #### ---- Adding gene activity matrix based on open chromatin regions ---- ####
-gene.activities <- GeneActivity(BMHAPBS8wk)
+gene.activities <- GeneActivity(sampleobj)
 # add the gene activity matrix to the Seurat object as a new assay and normalize it
-BMHAPBS8wk[['RNA']] <- CreateAssayObject(counts = gene.activities)
-BMHAPBS8wk <- NormalizeData(
-  object = BMHAPBS8wk,
+sampleobj[['RNA']] <- CreateAssayObject(counts = gene.activities)
+sampleobj <- NormalizeData(
+  object = sampleobj,
   assay = 'RNA',
   normalization.method = 'LogNormalize',
-  scale.factor = median(BMHAPBS8wk$nCount_RNA)
+  scale.factor = median(sampleobj$nCount_RNA)
 )
+
+#### ---- save object ---- ####
+## to sample folder
+saveRDS(sampleobj, file = paste0(proj_data_dir,samp,"/",samp,".rds"))
