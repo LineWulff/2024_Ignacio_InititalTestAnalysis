@@ -68,41 +68,6 @@ BMHAPBS8wk@meta.data$colonization <- unlist(str_split(BMHAPBS8wk@meta.data$orig.
 BMHAPBS8wk@meta.data$stimulation <- unlist(str_split(BMHAPBS8wk@meta.data$orig.ident,"-"))[seq(3,nrow(BMHAPBS8wk@meta.data)*4,4)]
 BMHAPBS8wk@meta.data$timepoint <- unlist(str_split(BMHAPBS8wk@meta.data$orig.ident,"-"))[seq(4,nrow(BMHAPBS8wk@meta.data)*4,4)]
 
-
-## Sample 2
-samp <- "BM-PBS-PBS-8wk"
-samp_dir <- paste(proj_data_dir, samp, sep = "")
-counts <- Read10X_h5(filename = paste(samp_dir,"filtered_peak_bc_matrix.h5",sep = "/"))
-motifs <- Read10X_h5(filename = paste(samp_dir,"filtered_tf_bc_matrix.h5",sep = "/"))
-
-metadata <- read.csv(
-  file = paste(samp_dir,"singlecell.csv",sep="/"),
-  header = TRUE,
-  row.names = 1
-)
-
-chrom_assay <- CreateChromatinAssay(
-  counts = counts,
-  sep = c(":", "-"),
-  fragments = paste(samp_dir,'fragments.tsv.gz',sep="/"),
-  min.cells = 10,
-  min.features = 200
-)
-
-BMPBSPBS8wk <- CreateSeuratObject(
-  counts = chrom_assay,
-  assay = "peaks",
-  motifs = motifs,
-  meta.data = metadata
-)
-
-Annotation(BMPBSPBS8wk) <- annotations
-BMPBSPBS8wk@meta.data$orig.ident <- samp
-BMPBSPBS8wk@meta.data$tissue <- unlist(str_split(BMPBSPBS8wk@meta.data$orig.ident,"-"))[seq(1,nrow(BMPBSPBS8wk@meta.data)*4,4)]
-BMPBSPBS8wk@meta.data$colonization <- unlist(str_split(BMPBSPBS8wk@meta.data$orig.ident,"-"))[seq(2,nrow(BMPBSPBS8wk@meta.data)*4,4)]
-BMPBSPBS8wk@meta.data$stimulation <- unlist(str_split(BMPBSPBS8wk@meta.data$orig.ident,"-"))[seq(3,nrow(BMPBSPBS8wk@meta.data)*4,4)]
-BMPBSPBS8wk@meta.data$timepoint <- unlist(str_split(BMPBSPBS8wk@meta.data$orig.ident,"-"))[seq(4,nrow(BMPBSPBS8wk@meta.data)*4,4)]
-
 ## after last sample remove the unnecesseary objects to save env. space
 rm(chrom_assay, counts, metadata, annotations)
 
@@ -132,7 +97,6 @@ BMHAPBS8wk <- TSSEnrichment(object = BMHAPBS8wk, fast = FALSE)
 
 # add blacklist ratio and fraction of reads in peaks
 BMHAPBS8wk$pct_reads_in_peaks <- BMHAPBS8wk$peak_region_fragments / BMHAPBS8wk$passed_filters * 100
-BMHAPBS8wk$blacklist_ratio <- BMHAPBS8wk$blacklist_region_fragments / BMHAPBS8wk$peak_region_fragments
 
 VlnPlot(
   object = BMHAPBS8wk,
@@ -140,6 +104,20 @@ VlnPlot(
   pt.size = 0.1,
   ncol = 3
 )
+
+DensityScatter(BMHAPBS8wk, x = 'nCount_peaks', y = 'TSS.enrichment', log_x = TRUE, quantiles = TRUE)
+
+ggplot(BMHAPBS8wk@meta.data, aes(x = nCount_peaks))+
+  geom_histogram(fill="grey",bins = 100)+
+  geom_vline(xintercept = c(3000,100000), colour = "red")
+
+ggplot(BMHAPBS8wk@meta.data, aes(x = nCount_peaks, y = nucleosome_signal, colour = pct_reads_in_peaks))+
+  geom_point_rast()+scale_color_viridis_c()+
+  geom_vline(xintercept = c(3000,130000))
+
+ggplot(BMHAPBS8wk@meta.data, aes(x = nCount_peaks, y = nucleosome_signal, colour = blacklist_fraction))+
+  geom_point_rast()+scale_color_viridis_c()+
+  geom_vline(xintercept = c(3000,130000))
 
 ## Nucleosome banding patterns
 # grouping cells based on their mononuc/nfr ration, here 2:1 - 2x mononucleosome bound to nfr 
@@ -155,13 +133,50 @@ TSSPlot(BMHAPBS8wk, group.by = 'nucleosome_group') + NoLegend()
 
 
 #### ---- Subset and save thresholds ---- ####
+nCount_low = 3000
+nCount_high = 100000
+perc_readspeaks = 15
+nuc_sign = 2
+blacklist_th = 0.05
+TSS.enrich = 3
+
+npre <- length(Cells(BMHAPBS8wk))
+
 BMHAPBS8wk <- subset(
   x = BMHAPBS8wk,
-  subset = nCount_peaks > 3000 &
-    nCount_peaks < 30000 &
-    pct_reads_in_peaks > 15 &
-    blacklist_ratio < 0.05 &
-    nucleosome_signal < 4 &
-    TSS.enrichment > 3
+  subset = nCount_peaks > nCount_low &
+    nCount_peaks < nCount_high &
+    pct_reads_in_peaks > perc_readspeaks &
+    blacklist_fraction < blacklist_th &
+    nucleosome_signal < nuc_sign &
+    TSS.enrichment > TSS.enrich
 )
+
+npost <- length(Cells(BMHAPBS8wk))
+remperc <- (npre-npost)/npost*100
+
 BMHAPBS8wk
+
+ThresFile <- file(paste(dato,"SubsetThresholds",sample,".txt",sep="_"))
+writeLines(c(paste("Pre subsetting there were",npre,"cells."),
+             paste("Removing ~",remperc,"% of cells during single cell QC."),
+             paste("Post subsetting there are:",npost,"cells"),
+             "Thresholds were set to:",
+             paste("Peaks per cell:",nCount_low,"to",nCount_high),
+             paste("Percentage of reads in peaks: >",perc_readspeaks),
+             paste("Nucleosome signal (Mononuc/NFR ratio based): <",nuc_sign),
+             paste("Mean TSS enrichment was set to: >",TSS.enrich),
+             paste("Blacklist fraction: <",blacklist_th,"%")), 
+           ThresFile)
+close(ThresFile)
+
+#### ---- Adding gene activity matrix based on open chromatin regions ---- ####
+gene.activities <- GeneActivity(BMHAPBS8wk)
+# add the gene activity matrix to the Seurat object as a new assay and normalize it
+BMHAPBS8wk[['RNA']] <- CreateAssayObject(counts = gene.activities)
+BMHAPBS8wk <- NormalizeData(
+  object = BMHAPBS8wk,
+  assay = 'RNA',
+  normalization.method = 'LogNormalize',
+  scale.factor = median(BMHAPBS8wk$nCount_RNA)
+)
