@@ -101,37 +101,53 @@ sampleobj <- TSSEnrichment(object = sampleobj, fast = FALSE)
 # add blacklist ratio and fraction of reads in peaks
 sampleobj$pct_reads_in_peaks <- sampleobj$peak_region_fragments / sampleobj$passed_filters * 100
 
+pdf(paste(dato,samp,"scATAC_QC_VlnPlots.pdf"),height = 4, width = 8)
 VlnPlot(
   object = sampleobj,
   features = c('nCount_peaks', 'TSS.enrichment', 'blacklist_fraction', 'nucleosome_signal', 'pct_reads_in_peaks'),
   pt.size = 0.1,
   ncol = 3
 )
+dev.off()
 
+pdf(paste(dato,samp,"scATAC_QC_DEnsityPlot_CountPeaksvsTSSenrich.pdf"),height = 4, width = 5)
 DensityScatter(sampleobj, x = 'nCount_peaks', y = 'TSS.enrichment', log_x = TRUE, quantiles = TRUE)
+dev.off
 
+pdf(paste(dato,samp,"scATAC_QC_Histo_CountPeaks.pdf"),height = 4, width = 5)
 ggplot(sampleobj@meta.data, aes(x = nCount_peaks))+
   geom_histogram(fill="grey",bins = 100)+
   geom_vline(xintercept = c(3000,100000), colour = "red")
+dev.off()
 
+pdf(paste(dato,samp,"scATAC_QC_DotPlot_CountPeakvsNucleosomeSign_ColPctReadsPeaks.pdf"),height = 4, width = 5)
 ggplot(sampleobj@meta.data, aes(x = nCount_peaks, y = nucleosome_signal, colour = pct_reads_in_peaks))+
   geom_point_rast()+scale_color_viridis_c()+
   geom_vline(xintercept = c(3000,130000))
+dev.off()
 
+pdf(paste(dato,samp,"scATAC_QC_DotPlot_CountPeakvsNucleosomeSign_ColBlacklist.pdf"),height = 4, width = 5)
 ggplot(sampleobj@meta.data, aes(x = nCount_peaks, y = nucleosome_signal, colour = blacklist_fraction))+
   geom_point_rast()+scale_color_viridis_c()+
   geom_vline(xintercept = c(3000,130000))
+dev.off()
 
 ## Nucleosome banding patterns
 # grouping cells based on their mononuc/nfr ration, here 2:1 - 2x mononucleosome bound to nfr 
 sampleobj$nucleosome_group <- ifelse(sampleobj$nucleosome_signal > 2, 'NS > 2', 'NS < 2') 
 # plotted with fragment histo 
 length(sampleobj$nucleosome_group[sampleobj$nucleosome_group=='NS > 2'])
-FragmentHistogram(sampleobj, group.by = 'nucleosome_group', region = "chr1-1-20000000")+geom_vline(xintercept = 147)
 
-## TSS enrivhment
+pdf(paste(dato,samp,"scATAC_QC_DotPlot_FragmentDist_SplitByNucleosomesign.pdf"),height = 4, width = 8)
+FragmentHistogram(sampleobj, group.by = 'nucleosome_group', region = "chr1-1-20000000")+geom_vline(xintercept = 147)
+dev.off()
+
+## TSS enrichment
 sampleobj$high.tss <- ifelse(sampleobj$TSS.enrichment > 3, 'High', 'Low')
+
+pdf(paste(dato,samp,"scATAC_QC_DotPlot_TSSenrich_SplitHighvsLow.pdf"),height = 4, width = 8)
 TSSPlot(sampleobj, group.by = 'high.tss') + NoLegend()
+dev.off()
 TSSPlot(sampleobj, group.by = 'nucleosome_group') + NoLegend()
 
 
