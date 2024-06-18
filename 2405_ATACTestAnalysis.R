@@ -15,9 +15,12 @@ library(biovizBase)
 library(EnsDb.Mmusculus.v79)
 
 #### ---- variables used throughout script ---- ####
+rm(list = ls())
 projdir <- getwd()
 dato <- str_sub(str_replace_all(Sys.Date(),"-","_"), 3, -1)
 proj_data_dir <- "/Volumes/Promise RAID/Line/projects/24_TI_IgnacioWulff/samples/"
+# Update sample between each
+samp <- "BM-HA107-PBS-8wk"
 
 #### ---- Creating object from downloaded data ---- ####
 ## # extract gene annotations from EnsDb
@@ -28,7 +31,6 @@ seqlevels(annotations) <- paste0('chr', seqlevels(annotations))
 genome(annotations) <- "mm10"
 
 ## Sample object creation
-samp <- "BM-HA107-PBS-8wk"
 samp_dir <- paste(proj_data_dir, samp, sep = "")
 counts <- Read10X_h5(filename = paste(samp_dir,"filtered_peak_bc_matrix.h5",sep = "/"))
 motifs <- Read10X_h5(filename = paste(samp_dir,"filtered_tf_bc_matrix.h5",sep = "/"))
@@ -101,7 +103,7 @@ sampleobj <- TSSEnrichment(object = sampleobj, fast = FALSE)
 # add blacklist ratio and fraction of reads in peaks
 sampleobj$pct_reads_in_peaks <- sampleobj$peak_region_fragments / sampleobj$passed_filters * 100
 
-pdf(paste(dato,samp,"scATAC_QC_VlnPlots.pdf"),height = 4, width = 8)
+pdf(paste(dato,samp,"scATAC_QC_VlnPlots.pdf", sep="_"),height = 8, width = 8)
 VlnPlot(
   object = sampleobj,
   features = c('nCount_peaks', 'TSS.enrichment', 'blacklist_fraction', 'nucleosome_signal', 'pct_reads_in_peaks'),
@@ -110,26 +112,26 @@ VlnPlot(
 )
 dev.off()
 
-pdf(paste(dato,samp,"scATAC_QC_DEnsityPlot_CountPeaksvsTSSenrich.pdf"),height = 4, width = 5)
+pdf(paste(dato,samp,"scATAC_QC_DensityPlot_CountPeaksvsTSSenrich.pdf", sep="_"),height = 4, width = 5)
 DensityScatter(sampleobj, x = 'nCount_peaks', y = 'TSS.enrichment', log_x = TRUE, quantiles = TRUE)
-dev.off
+dev.off()
 
-pdf(paste(dato,samp,"scATAC_QC_Histo_CountPeaks.pdf"),height = 4, width = 5)
+pdf(paste(dato,samp,"scATAC_QC_Histo_CountPeaks.pdf", sep="_"),height = 4, width = 5)
 ggplot(sampleobj@meta.data, aes(x = nCount_peaks))+
   geom_histogram(fill="grey",bins = 100)+
   geom_vline(xintercept = c(3000,100000), colour = "red")
 dev.off()
 
-pdf(paste(dato,samp,"scATAC_QC_DotPlot_CountPeakvsNucleosomeSign_ColPctReadsPeaks.pdf"),height = 4, width = 5)
+pdf(paste(dato,samp,"scATAC_QC_DotPlot_CountPeakvsNucleosomeSign_ColPctReadsPeaks.pdf", sep="_"),height = 4, width = 5.5)
 ggplot(sampleobj@meta.data, aes(x = nCount_peaks, y = nucleosome_signal, colour = pct_reads_in_peaks))+
   geom_point_rast()+scale_color_viridis_c()+
-  geom_vline(xintercept = c(3000,130000))
+  geom_vline(xintercept = c(3000,100000))
 dev.off()
 
-pdf(paste(dato,samp,"scATAC_QC_DotPlot_CountPeakvsNucleosomeSign_ColBlacklist.pdf"),height = 4, width = 5)
+pdf(paste(dato,samp,"scATAC_QC_DotPlot_CountPeakvsNucleosomeSign_ColBlacklist.pdf", sep="_"),height = 4, width = 5.5)
 ggplot(sampleobj@meta.data, aes(x = nCount_peaks, y = nucleosome_signal, colour = blacklist_fraction))+
   geom_point_rast()+scale_color_viridis_c()+
-  geom_vline(xintercept = c(3000,130000))
+  geom_vline(xintercept = c(3000,100000))
 dev.off()
 
 ## Nucleosome banding patterns
@@ -138,15 +140,15 @@ sampleobj$nucleosome_group <- ifelse(sampleobj$nucleosome_signal > 2, 'NS > 2', 
 # plotted with fragment histo 
 length(sampleobj$nucleosome_group[sampleobj$nucleosome_group=='NS > 2'])
 
-pdf(paste(dato,samp,"scATAC_QC_DotPlot_FragmentDist_SplitByNucleosomesign.pdf"),height = 4, width = 8)
+pdf(paste(dato,samp,"scATAC_QC_DotPlot_FragmentDist_SplitByNucleosomesign.pdf", sep="_"),height = 4, width = 8)
 FragmentHistogram(sampleobj, group.by = 'nucleosome_group', region = "chr1-1-20000000")+geom_vline(xintercept = 147)
 dev.off()
 
 ## TSS enrichment
 sampleobj$high.tss <- ifelse(sampleobj$TSS.enrichment > 3, 'High', 'Low')
 
-pdf(paste(dato,samp,"scATAC_QC_DotPlot_TSSenrich_SplitHighvsLow.pdf"),height = 4, width = 8)
-TSSPlot(sampleobj, group.by = 'high.tss') + NoLegend()
+pdf(paste(dato,samp,"scATAC_QC_DotPlot_TSSenrich_SplitHighvsLow.pdf", sep="_"),height = 4, width = 8)
+TSSPlot(sampleobj, group.by = 'high.tss') + NoLegend() + geom_hline(yintercept = 3)
 dev.off()
 TSSPlot(sampleobj, group.by = 'nucleosome_group') + NoLegend()
 
