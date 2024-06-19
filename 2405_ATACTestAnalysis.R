@@ -1,7 +1,7 @@
-#' R script for testing scATAC analysis w. Seurat and Signac
+#' R script for preprocessing samples with scATACseq data
 #' Author: Line Wulff
 #' Date (created): 24-05-16
-#' # Based on https://stuartlab.org/signac/articles/sampleobj_vignette
+#' # Based on hhttps://stuartlab.org/signac/articles/pbmc_vignette.html
 
 #### ---- Initiate libraries ---- ####
 library(ggplot2)
@@ -20,7 +20,7 @@ projdir <- getwd()
 dato <- str_sub(str_replace_all(Sys.Date(),"-","_"), 3, -1)
 proj_data_dir <- "/Volumes/Promise RAID/Line/projects/24_TI_IgnacioWulff/samples/"
 # Update sample between each
-samp <- "BM-HA107-PBS-8wk"
+samp <- "LP-PBS-PBS-8wk"
 
 #### ---- Creating object from downloaded data ---- ####
 ## # extract gene annotations from EnsDb
@@ -119,19 +119,19 @@ dev.off()
 pdf(paste(dato,samp,"scATAC_QC_Histo_CountPeaks.pdf", sep="_"),height = 4, width = 5)
 ggplot(sampleobj@meta.data, aes(x = nCount_peaks))+
   geom_histogram(fill="grey",bins = 100)+
-  geom_vline(xintercept = c(3000,100000), colour = "red")
+  geom_vline(xintercept = c(3000,26000), colour = "red")
 dev.off()
 
 pdf(paste(dato,samp,"scATAC_QC_DotPlot_CountPeakvsNucleosomeSign_ColPctReadsPeaks.pdf", sep="_"),height = 4, width = 5.5)
 ggplot(sampleobj@meta.data, aes(x = nCount_peaks, y = nucleosome_signal, colour = pct_reads_in_peaks))+
   geom_point_rast()+scale_color_viridis_c()+
-  geom_vline(xintercept = c(3000,100000))
+  geom_vline(xintercept = c(3000,26000))
 dev.off()
 
 pdf(paste(dato,samp,"scATAC_QC_DotPlot_CountPeakvsNucleosomeSign_ColBlacklist.pdf", sep="_"),height = 4, width = 5.5)
 ggplot(sampleobj@meta.data, aes(x = nCount_peaks, y = nucleosome_signal, colour = blacklist_fraction))+
   geom_point_rast()+scale_color_viridis_c()+
-  geom_vline(xintercept = c(3000,100000))
+  geom_vline(xintercept = c(3000,26000))
 dev.off()
 
 ## Nucleosome banding patterns
@@ -155,7 +155,7 @@ TSSPlot(sampleobj, group.by = 'nucleosome_group') + NoLegend()
 
 #### ---- Subset and save thresholds ---- ####
 nCount_low = 3000
-nCount_high = 100000
+nCount_high = 26000
 perc_readspeaks = 15
 nuc_sign = 2
 blacklist_th = 0.05
@@ -175,6 +175,7 @@ sampleobj <- subset(
 
 npost <- length(Cells(sampleobj))
 remperc <- (npre-npost)/npost*100
+remperc
 
 sampleobj
 
